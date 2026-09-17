@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/chrober/bliss-playlist-guidance-spi/schemas/guidance-addon-spi-v1.schema.json",
+  "title": "Bliss playlist optimizer guidance addon SPI v1",
+  "description": "JSONL message schema. Each line is one request or response object.",
+  "oneOf": [
+    {
+      "type": "object",
+      "required": ["type", "spi_version"],
+      "properties": {
+        "type": {"enum": ["describe", "close"]},
+        "spi_version": {"const": 1}
+      },
+      "additionalProperties": true
+    },
+    {
+      "type": "object",
+      "required": ["type", "spi_version", "job_id", "options", "candidates", "anchors"],
+      "properties": {
+        "type": {"const": "prepare"},
+        "spi_version": {"const": 1},
+        "job_id": {"type": "string", "minLength": 1},
+        "options": {"type": "object"},
+        "candidates": {"type": "array"},
+        "anchors": {"type": "array"}
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["type", "spi_version", "request_id", "context", "candidates"],
+      "properties": {
+        "type": {"const": "score"},
+        "spi_version": {"const": 1},
+        "request_id": {"type": "string", "minLength": 1},
+        "context": {"type": "object"},
+        "candidates": {"type": "array"}
+      },
+      "additionalProperties": false
+    }
+  ]
+}
