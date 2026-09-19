@@ -1,44 +1,39 @@
-# Guidance add-on SPI v1
+# Guidance add-on SPI v2
 
-`bliss-playlist-guidance-spi` defines the provider-neutral process boundary
-between `bliss-playlist-optimizer` (the **host**) and optional guidance add-ons
-(the **providers**). The normative machine-readable contract is
-[`schemas/guidance-addon-spi-v1.schema.json`](schemas/guidance-addon-spi-v1.schema.json).
+`bliss-playlist-guidance-spi` defines the provider-neutral, JSONL process
+boundary between `bliss-playlist-optimizer` (the **host**) and optional
+guidance providers. The normative machine-readable contract is
+[`schemas/guidance-addon-spi-v2.schema.json`](schemas/guidance-addon-spi-v2.schema.json).
 
-## Scope and vocabulary
+## Purpose and boundaries
 
-Bliss remains the authority for acoustic distance, route feasibility, eligible
-local-library membership, uniqueness, and artist/album/track repeat windows. An
-add-on can only express a preference for candidates that the optimizer has
-already admitted.
+Bliss remains the authority for acoustic distance, candidate-library
+membership, route feasibility, uniqueness, genre restrictions, and repeat
+windows. A provider expresses only a bounded preference for candidates the
+optimizer has already admitted to a shortlist.
 
-- **Evidence** is a raw, frozen observation: for example a Last.fm relation or
-  an LMS play-count snapshot.
-- **Guidance** is the normalized, bounded candidate preference derived from
-  evidence.
-- **Reranking** is the host-side operation that may combine Bliss ranking and
-  guidance. A provider does not rerank a route.
+- **Evidence artifact** means immutable, hash-verified input such as resolved
+  Last.fm relations.
+- **Trusted resource** means a plugin-selected, read-only source that a
+  provider may query during a job, such as Lyrion's `persist.db`.
+- **Guidance** means a signed, confidence-weighted candidate preference.
+- **Reranking** is performed by the host; a provider never mutates a route.
 
-Therefore a provider cannot admit an excluded track, permit a repeat-window
-violation, or make an acoustically invalid route valid.
+Providers cannot admit excluded tracks, relax repeat windows, or make an
+acoustically invalid route valid.
 
-## Process and trust boundary
+## Transport and trust
 
-The host starts a configured provider as a child process and communicates in
-UTF-8 newline-delimited JSON (JSONL) over stdin/stdout. Each complete JSON
-object occupies one line. Providers must not write prose, logs, banners, or
-extra lines to stdout; use stderr for diagnostics if needed. Each request
-receives at most one response.
+The host starts a configured provider and communicates in UTF-8 newline-
+delimited JSON (JSONL) on stdin/stdout. One complete JSON object occupies one
+line. Providers write no prose or logs to stdout; diagnostic output belongs on
+stderr.
 
-The executable path and arguments in `guidance_addons` are trusted integration
-configuration, not playlist or web-form input. The host applies a finite
-timeout. A malformed response, timeout, or provider failure produces neutral
-guidance rather than failing a Bliss-only route.
-
-The current optimizer host validates providers, prepares them with a frozen job
-snapshot, and records bounded signals and diagnostics in the native artifact.
-Provider-specific signals are not yet used to select a route; the later
-reranking integration will use this same SPI boundary for every planner.
+Executable paths, arguments, artifact paths, resource paths, and provider
+policy are trusted integration configuration. They must never be copied from a
+playlist, web form, or other untrusted request input. The host uses finite
+timeouts; malformed responses, timeouts, and provider failures disable only
+that provider and leave Bliss-only routing available.
 
 ## Lifecycle
 
@@ -46,11 +41,11 @@ reranking integration will use this same SPI boundary for every planner.
 sequenceDiagram
     participant H as Optimizer host
     participant P as Guidance provider
-    H->>P: describe
+    H->>P: describe (SPI v2)
     P-->>H: manifest
-    H->>P: prepare(job snapshot, options, candidates, anchors)
-    P-->>H: prepared(snapshot_id, diagnostics)
-    loop one or more candidate batches
+    H->>P: prepare(artifacts, resources, anchors)
+    P-->>H: prepared(snapshot diagnostics)
+    loop bounded candidate shortlists
         H->>P: score(context, candidates)
         P-->>H: scores(signals, diagnostics)
     end
@@ -58,107 +53,107 @@ sequenceDiagram
     P-->>H: closed
 ```
 
-The host may omit a provider, make no score calls after preparation, or kill a
-timed-out process without `close`. A provider must reject `score` before a
-successful `prepare` with a non-retryable `NOT_PREPARED` error.
+`prepare` is job-scoped and intentionally contains no decoded Bliss library and
+no general candidate inventory. The provider may load its declared artifact or
+open its declared trusted resource once. `score` contains only the candidates
+being considered at that specific planner boundary.
 
-## Manifest discovery
+## Messages
 
-The host begins with:
+### Describe and manifest
 
-```json
-{ "type": "describe", "spi_version": 1 }
-```
-
-The `manifest` response must use SPI version `1`, protocol
-`bliss-playlist-optimizer-guidance-jsonl`, and the provider ID by which the host
-configured it. A mismatch disables that provider for the job.
-
-| Manifest field         | Meaning                                                          |
-| ---------------------- | ---------------------------------------------------------------- |
-| `provider_id`          | Stable identity, for example `lastfm-guidance`.                  |
-| `provider_version`     | Build/version recorded in diagnostics.                           |
-| `capabilities`         | `global_candidate_guidance`, `edge_candidate_guidance`, or both. |
-| `required_context`     | Declared prerequisites, such as candidate identity.              |
-| `configuration_schema` | Optional JSON Schema for provider-specific `prepare.options`.    |
-
-Global guidance describes a candidate independently of a transition. Edge
-guidance describes a candidate for the route boundary between supplied anchors.
-
-## Prepare: freeze provider input
-
-The host sends one job-scoped `prepare` request with a `job_id`, trusted
-provider `options`, the frozen local `candidates` inventory, and immutable
-source/history `anchors`. A `Candidate` has a stable `candidate_id` and may
-include database path, title, artist, album, recording MBID, and artist MBIDs.
-An `Anchor` has an `anchor_id` plus the same track fields. Metadata lets a
-provider resolve evidence; stable IDs let the host safely use returned signals.
-
-The provider returns `prepared` with an optional `snapshot_id` and
-`Diagnostics`. The snapshot ID identifies its frozen input. Diagnostics may
-include provider state, request/failure counters, and structured details.
-
-## Score: return bounded guidance
-
-Each `score` request has a `request_id`, `ScoreContext`, and a candidate batch.
-The context scope is either `global` (candidate preference independent of a
-transition) or `edge` (preference for the boundary between `left_anchor_id` and
-`right_anchor_id`). Either anchor may be absent for a one-sided opening or
-closing context. `context_track_ids` is an ordered immutable suffix, not
-permission for a provider to mutate the route.
-
-Each returned `GuidanceSignal` has the following contract:
-
-| Field          | Required behavior                                                         |
-| -------------- | ------------------------------------------------------------------------- |
-| `candidate_id` | Must identify a candidate in that request batch.                          |
-| `scope`        | Global or edge, matching the intended use.                                |
-| `score`        | Signed preference in `[-1, 1]`: positive supports and negative de-boosts. |
-| `confidence`   | Confidence in `[0, 1]`; it does not replace score.                        |
-| `rationale`    | Optional concise, diagnostic explanation.                                 |
-| `observed_at`  | Optional raw-evidence timestamp.                                          |
-
-The host clamps score and confidence to these ranges. A provider should omit
-candidates for which it has no meaningful guidance; an absent signal is neutral.
-
-## Errors and closure
-
-An `error` response contains a stable `code`, actionable `message`, and
-`retryable` flag. A missing snapshot, no usable evidence, a crashed provider, or
-a timeout never relaxes acoustic or repeat constraints. The host records the
-failure and continues with neutral guidance.
-
-For a healthy session, the host sends:
+The host starts a session with:
 
 ```json
-{ "type": "close", "spi_version": 1 }
+{"type":"describe","spi_version":2}
 ```
 
-The provider replies with `closed` and exits. It must also tolerate the host
-closing pipes or killing a failed process.
+The manifest must report SPI version `2`, protocol
+`bliss-playlist-optimizer-guidance-jsonl-v2`, a stable provider ID, version,
+and capabilities. The host disables a provider whose manifest does not match
+its trusted configuration.
 
-## Minimal exchange
+### Prepare
+
+`prepare` supplies provider options, hash-bound artifacts, trusted resources,
+and source/history anchors. It does not contain a `candidates` field.
 
 ```json
-{"type":"describe","spi_version":1}
-{"type":"manifest","spi_version":1,"provider_id":"example-guidance","provider_version":"0.1.0","protocol":"bliss-playlist-optimizer-guidance-jsonl","capabilities":["edge_candidate_guidance"],"required_context":["candidate_identity"],"configuration_schema":null}
-{"type":"prepare","spi_version":1,"job_id":"job-42","options":{"artifact_path":"/tmp/evidence.json"},"candidates":[{"candidate_id":"bliss-row-42"}],"anchors":[{"anchor_id":"left","candidate_id":"source-a"},{"anchor_id":"right","candidate_id":"source-b"}]}
-{"type":"prepared","provider_id":"example-guidance","snapshot_id":"evidence-42","diagnostics":{"state":"fresh","request_count":1,"failure_count":0}}
-{"type":"score","spi_version":1,"request_id":"gap-1","context":{"scope":"edge","left_anchor_id":"left","right_anchor_id":"right","context_track_ids":["left"]},"candidates":[{"candidate_id":"bliss-row-42"}]}
-{"type":"scores","provider_id":"example-guidance","request_id":"gap-1","signals":[{"candidate_id":"bliss-row-42","scope":"edge","score":0.8,"confidence":0.9,"rationale":"example relation"}],"diagnostics":{"state":"fresh","request_count":1,"failure_count":0}}
-{"type":"close","spi_version":1}
-{"type":"closed","provider_id":"example-guidance"}
+{
+  "type":"prepare",
+  "spi_version":2,
+  "job_id":"preview-42",
+  "options":{"preference_percent":-40},
+  "artifacts":[{
+    "kind":"eligible-candidate-identities-v1",
+    "path":"/private/cache/candidate-identities.json",
+    "sha256":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+  }],
+  "resources":[{
+    "kind":"lms-persist-sqlite-v1",
+    "path":"/private/lms/persist.db",
+    "access":"read_only"
+  }],
+  "anchors":[]
+}
 ```
 
-The lines are in request/response order. In a real session the host writes
-requests and the provider writes only responses.
+Artifacts are immutable during the native process lifetime and are verified by
+SHA-256. Resources are live and cannot be hash-verified as job artifacts. A
+provider must validate their type, trusted path, read-only access, and expected
+schema, then report snapshot metadata in `prepared` diagnostics.
 
-## Provider checklist
+### Score
 
-- Use a stable provider ID, SPI version, and protocol.
-- Read provider-specific configuration only from `prepare.options`.
-- Freeze raw input during `prepare`; do not fetch mutable data during `score`.
-- Return only candidate IDs from the request batch and bound every signal.
-- Keep stdout exclusively for JSONL responses.
-- Represent no match with empty `scores`, not an invented negative signal.
-- Treat failure as advisory and never weaken Bliss hard constraints.
+`score` supplies one bounded shortlist and actual planner context. Candidate
+identity may include `lms_urlmd5` for a provider that needs Lyrion database
+lookups; it does not give the provider permission to query arbitrary tracks.
+
+```json
+{
+  "type":"score",
+  "spi_version":2,
+  "request_id":"gap-7-shortlist-1",
+  "context":{"scope":"edge","left_anchor_id":"source-a","right_anchor_id":"source-b","context_track_ids":["source-a"]},
+  "candidates":[{"candidate_id":"bliss-row-42","lms_urlmd5":"aabbcc"}]
+}
+```
+
+Providers return signals only for candidate IDs in that score request. A signal
+has a `scope`, `score` in `[-1, 1]`, `confidence` in `[0, 1]`, and optional
+concise rationale and observation time. Omitting a candidate is neutral.
+
+```json
+{
+  "type":"scores",
+  "provider_id":"playcount-guidance",
+  "request_id":"gap-7-shortlist-1",
+  "signals":[{"candidate_id":"bliss-row-42","scope":"global","score":-0.6,"confidence":1.0,"rationale":"LMS play-count percentile 0.200"}],
+  "diagnostics":{"state":"fresh","request_count":2,"failure_count":0}
+}
+```
+
+### Close and errors
+
+The host sends `{"type":"close","spi_version":2}` after a healthy job.
+Providers must also tolerate closed pipes or termination after a timeout.
+Errors contain a stable `code`, actionable `message`, and `retryable` flag.
+They are advisory: the host records them and continues without that provider.
+
+## Provider requirements
+
+- Validate SPI version, declared artifact hashes, resource type, and schema.
+- Read or index long-lived input during `prepare`, not repeatedly during
+  `score`.
+- Keep stdout exclusively for one JSONL response per request.
+- Return only requested IDs and bounded signal values.
+- Treat unavailable evidence as neutral; never weaken Bliss hard constraints.
+- Keep score calls bounded and avoid a network request, LMS API call, or
+  unbounded data transfer per candidate.
+- Emit aggregate diagnostics without private music paths at INFO-level use.
+
+## Compatibility
+
+SPI v2 deliberately replaces v1. A host and provider must agree on both the
+version and protocol string; otherwise the host disables the provider for that
+job. No v1-to-v2 compatibility shim is defined.

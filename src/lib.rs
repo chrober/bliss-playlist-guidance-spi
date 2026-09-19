@@ -9,8 +9,8 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-pub const SPI_VERSION: u16 = 1;
-pub const PROTOCOL_NAME: &str = "bliss-playlist-optimizer-guidance-jsonl";
+pub const SPI_VERSION: u16 = 2;
+pub const PROTOCOL_NAME: &str = "bliss-playlist-optimizer-guidance-jsonl-v2";
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -22,7 +22,8 @@ pub enum GuidanceRequest {
         spi_version: u16,
         job_id: String,
         options: Value,
-        candidates: Vec<Candidate>,
+        artifacts: Vec<ArtifactDescriptor>,
+        resources: Vec<ResourceDescriptor>,
         anchors: Vec<Anchor>,
     },
     Score {
@@ -86,6 +87,8 @@ pub enum Capability {
 pub struct Candidate {
     pub candidate_id: String,
     #[serde(default)]
+    pub lms_urlmd5: Option<String>,
+    #[serde(default)]
     pub database_file: Option<String>,
     #[serde(default)]
     pub title: Option<String>,
@@ -97,6 +100,26 @@ pub struct Candidate {
     pub recording_mbid: Option<String>,
     #[serde(default)]
     pub artist_mbids: Vec<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ArtifactDescriptor {
+    pub kind: String,
+    pub path: String,
+    pub sha256: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ResourceDescriptor {
+    pub kind: String,
+    pub path: String,
+    pub access: ResourceAccess,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ResourceAccess {
+    ReadOnly,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -188,6 +211,7 @@ mod tests {
             },
             candidates: vec![Candidate {
                 candidate_id: "bliss-row-42".into(),
+                lms_urlmd5: None,
                 database_file: Some("/music/a.mp3".into()),
                 title: Some("A song".into()),
                 artist: Some("An artist".into()),
@@ -214,5 +238,76 @@ mod tests {
         .bounded();
         assert_eq!(signal.score, 1.0);
         assert_eq!(signal.confidence, 0.0);
+    }
+
+    #[test]
+    fn prepare_round_trips_artifacts_and_resources_without_candidate_inventory() {
+        let request = GuidanceRequest::Prepare {
+            spi_version: 2,
+            job_id: "preview-42".into(),
+            options: serde_json::json!({"preference_percent": -40}),
+            artifacts: vec![ArtifactDescriptor {
+                kind: "resolved-lastfm-evidence-v1".into(),
+                path: "/private/job/semantic-evidence.json".into(),
+                sha256: "a".repeat(64),
+            }],
+            resources: vec![ResourceDescriptor {
+                kind: "lms-persist-sqlite-v1".into(),
+                path: "/private/lms/persist.db".into(),
+                access: ResourceAccess::ReadOnly,
+            }],
+            anchors: vec![],
+        };
+
+        let encoded = encode(&request).unwrap();
+        assert!(!encoded.contains("candidates"));
+        assert_eq!(decode_request(&encoded).unwrap(), request);
+    }
+
+    #[test]
+    fn score_candidate_preserves_lms_urlmd5() {
+        let request = GuidanceRequest::Score {
+            spi_version: 2,
+            request_id: "batch-1".into(),
+            context: ScoreContext {
+                scope: GuidanceScope::Global,
+                left_anchor_id: None,
+                right_anchor_id: None,
+                context_track_ids: vec![],
+            },
+            candidates: vec![Candidate {
+                candidate_id: "bliss-row-42".into(),
+                lms_urlmd5: Some("aabbcc".into()),
+                database_file: None,
+                title: None,
+                artist: None,
+                album: None,
+                recording_mbid: None,
+                artist_mbids: vec![],
+            }],
+        };
+
+        let decoded = decode_request(&encode(&request).unwrap()).unwrap();
+        let GuidanceRequest::Score { candidates, .. } = decoded else {
+            panic!("expected a score request");
+        };
+        assert_eq!(candidates[0].lms_urlmd5.as_deref(), Some("aabbcc"));
+    }
+
+    #[test]
+    fn v2_schema_declares_candidate_free_prepare() {
+        let schema: Value =
+            serde_json::from_str(include_str!("../schemas/guidance-addon-spi-v2.schema.json"))
+                .unwrap();
+        let prepare = &schema["$defs"]["prepare"];
+        assert!(prepare["required"]
+            .as_array()
+            .unwrap()
+            .contains(&Value::String("artifacts".into())));
+        assert!(prepare["required"]
+            .as_array()
+            .unwrap()
+            .contains(&Value::String("resources".into())));
+        assert!(prepare["properties"].get("candidates").is_none());
     }
 }
