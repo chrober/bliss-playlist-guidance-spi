@@ -150,6 +150,9 @@ pub enum GuidanceScope {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct GuidanceSignal {
     pub candidate_id: String,
+    /// Stable provider-defined channel, for example `lastfm_track`,
+    /// `lastfm_artist`, or `playcount`.
+    pub channel: String,
     pub scope: GuidanceScope,
     /// Normalized contribution in [-1, 1]. Positive values support a
     /// candidate, negative values penalize it, and zero is neutral.
@@ -229,6 +232,7 @@ mod tests {
     fn signals_are_bounded() {
         let signal = GuidanceSignal {
             candidate_id: "c".into(),
+            channel: "playcount".into(),
             scope: GuidanceScope::Global,
             score: 4.0,
             confidence: -2.0,
@@ -238,6 +242,22 @@ mod tests {
         .bounded();
         assert_eq!(signal.score, 1.0);
         assert_eq!(signal.confidence, 0.0);
+    }
+
+    #[test]
+    fn guidance_signal_round_trips_a_stable_channel() {
+        let signal = GuidanceSignal {
+            candidate_id: "bliss-row-42".into(),
+            channel: "lastfm_track".into(),
+            scope: GuidanceScope::Edge,
+            score: 0.75,
+            confidence: 0.9,
+            rationale: Some("similar recording".into()),
+            observed_at: None,
+        };
+
+        let decoded: GuidanceSignal = serde_json::from_str(&encode(&signal).unwrap()).unwrap();
+        assert_eq!(decoded.channel, "lastfm_track");
     }
 
     #[test]

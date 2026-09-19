@@ -120,15 +120,17 @@ lookups; it does not give the provider permission to query arbitrary tracks.
 ```
 
 Providers return signals only for candidate IDs in that score request. A signal
-has a `scope`, `score` in `[-1, 1]`, `confidence` in `[0, 1]`, and optional
-concise rationale and observation time. Omitting a candidate is neutral.
+has a stable provider-defined `channel` such as `lastfm_track`,
+`lastfm_artist`, or `playcount`; a `scope`; `score` in `[-1, 1]`;
+`confidence` in `[0, 1]`; and optional concise rationale and observation time.
+Omitting a candidate is neutral.
 
 ```json
 {
   "type":"scores",
   "provider_id":"playcount-guidance",
   "request_id":"gap-7-shortlist-1",
-  "signals":[{"candidate_id":"bliss-row-42","scope":"global","score":-0.6,"confidence":1.0,"rationale":"LMS play-count percentile 0.200"}],
+  "signals":[{"candidate_id":"bliss-row-42","channel":"playcount","scope":"global","score":-0.6,"confidence":1.0,"rationale":"LMS play-count percentile 0.200"}],
   "diagnostics":{"state":"fresh","request_count":2,"failure_count":0}
 }
 ```
