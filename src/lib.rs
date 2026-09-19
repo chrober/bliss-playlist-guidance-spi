@@ -70,6 +70,7 @@ pub struct Manifest {
     pub provider_version: String,
     pub protocol: String,
     pub capabilities: Vec<Capability>,
+    pub channels: Vec<ChannelDescriptor>,
     #[serde(default)]
     pub required_context: Vec<String>,
     #[serde(default)]
@@ -81,6 +82,15 @@ pub struct Manifest {
 pub enum Capability {
     GlobalCandidateGuidance,
     EdgeCandidateGuidance,
+}
+
+/// A provider-local, stable signal channel and the guidance scopes in which
+/// the provider can emit it. Hosts identify a policy by the pair of provider
+/// ID and this channel name, never by a globally reserved channel string.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ChannelDescriptor {
+    pub channel: String,
+    pub scopes: Vec<GuidanceScope>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -329,5 +339,25 @@ mod tests {
             .unwrap()
             .contains(&Value::String("resources".into())));
         assert!(prepare["properties"].get("candidates").is_none());
+    }
+
+    #[test]
+    fn manifest_round_trips_provider_local_channel_scopes() {
+        let manifest = Manifest {
+            spi_version: SPI_VERSION,
+            provider_id: "fixture-guidance".into(),
+            provider_version: "1.0.0".into(),
+            protocol: PROTOCOL_NAME.into(),
+            capabilities: vec![Capability::GlobalCandidateGuidance],
+            channels: vec![ChannelDescriptor {
+                channel: "preference".into(),
+                scopes: vec![GuidanceScope::Global],
+            }],
+            required_context: vec![],
+            configuration_schema: None,
+        };
+
+        let decoded: Manifest = serde_json::from_str(&encode(&manifest).unwrap()).unwrap();
+        assert_eq!(decoded.channels, manifest.channels);
     }
 }

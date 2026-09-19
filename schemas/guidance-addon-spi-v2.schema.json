@@ -113,7 +113,7 @@
     },
     "manifest": {
       "type": "object",
-      "required": ["type", "spi_version", "provider_id", "provider_version", "protocol", "capabilities"],
+      "required": ["type", "spi_version", "provider_id", "provider_version", "protocol", "capabilities", "channels"],
       "properties": {
         "type": { "const": "manifest" },
         "spi_version": { "const": 2 },
@@ -121,6 +121,22 @@
         "provider_version": { "type": "string", "minLength": 1 },
         "protocol": { "const": "bliss-playlist-optimizer-guidance-jsonl-v2" },
         "capabilities": { "type": "array", "items": { "enum": ["global_candidate_guidance", "edge_candidate_guidance"] } },
+        "channels": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["channel", "scopes"],
+            "properties": {
+              "channel": { "type": "string", "minLength": 1 },
+              "scopes": {
+                "type": "array",
+                "minItems": 1,
+                "items": { "enum": ["global", "edge"] }
+              }
+            },
+            "additionalProperties": false
+          }
+        },
         "required_context": { "type": "array", "items": { "type": "string" } },
         "configuration_schema": { "type": ["object", "null"] }
       },
