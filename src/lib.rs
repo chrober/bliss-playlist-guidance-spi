@@ -1,16 +1,16 @@
 //! Provider-neutral SPI shared by `bliss-playlist-optimizer` and guidance addons.
 //!
-//! The wire format is newline-delimited JSON (JSONL).  An optimizer starts an
-//! addon, sends a `describe` request, then a job-scoped `prepare` request and
+//! The wire format is newline-delimited JSON (JSONL). A host starts an addon,
+//! sends a `describe` request, then a job-scoped `prepare` request and
 //! zero or more batched `score` requests.  Addons never decide hard
 //! eligibility: they only return bounded guidance signals for candidates that
-//! the optimizer has already admitted to a scoring batch.
+//! the host has already admitted to a scoring batch.
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 pub const SPI_VERSION: u16 = 2;
-pub const PROTOCOL_NAME: &str = "bliss-playlist-optimizer-guidance-jsonl-v2";
+pub const PROTOCOL_NAME: &str = "bliss-guidance-jsonl-v2";
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -339,6 +339,18 @@ mod tests {
             .unwrap()
             .contains(&Value::String("resources".into())));
         assert!(prepare["properties"].get("candidates").is_none());
+    }
+
+    #[test]
+    fn v2_protocol_name_is_host_neutral() {
+        assert_eq!(PROTOCOL_NAME, "bliss-guidance-jsonl-v2");
+        let schema: Value =
+            serde_json::from_str(include_str!("../schemas/guidance-addon-spi-v2.schema.json"))
+                .unwrap();
+        assert_eq!(
+            schema["$defs"]["manifest"]["properties"]["protocol"]["const"],
+            Value::String(PROTOCOL_NAME.into()),
+        );
     }
 
     #[test]

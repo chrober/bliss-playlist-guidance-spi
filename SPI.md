@@ -1,16 +1,18 @@
 # Guidance add-on SPI v2
 
 `bliss-playlist-guidance-spi` defines the provider-neutral, JSONL process
-boundary between `bliss-playlist-optimizer` (the **host**) and optional
-guidance providers. The normative machine-readable contract is
+boundary between a Bliss-first **host** and optional guidance providers. The
+current host is `bliss-playlist-optimizer`; a later `bliss-mixer` host may use
+the identical contract while ranking its DSTM candidate pool. The normative
+machine-readable contract is
 [`schemas/guidance-addon-spi-v2.schema.json`](schemas/guidance-addon-spi-v2.schema.json).
 
 ## Purpose and boundaries
 
-Bliss remains the authority for acoustic distance, candidate-library
-membership, route feasibility, uniqueness, genre restrictions, and repeat
-windows. A provider expresses only a bounded preference for candidates the
-optimizer has already admitted to a shortlist.
+Bliss remains the authority for acoustic distance and candidate admission. The
+host remains responsible for its own feasibility, uniqueness, genre, repeat,
+and selection rules. A provider expresses only a bounded preference for
+candidates the host has already admitted to a shortlist.
 
 - **Evidence artifact** means immutable, hash-verified input such as resolved
   Last.fm relations.
@@ -68,10 +70,9 @@ The host starts a session with:
 {"type":"describe","spi_version":2}
 ```
 
-The manifest must report SPI version `2`, protocol
-`bliss-playlist-optimizer-guidance-jsonl-v2`, a stable provider ID, version,
-and capabilities. The host disables a provider whose manifest does not match
-its trusted configuration.
+The manifest must report SPI version `2`, protocol `bliss-guidance-jsonl-v2`, a
+stable provider ID, version, and capabilities. The host disables a provider
+whose manifest does not match its trusted configuration.
 
 ### Prepare
 

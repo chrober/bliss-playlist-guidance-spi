@@ -119,7 +119,7 @@
         "spi_version": { "const": 2 },
         "provider_id": { "type": "string", "minLength": 1 },
         "provider_version": { "type": "string", "minLength": 1 },
-        "protocol": { "const": "bliss-playlist-optimizer-guidance-jsonl-v2" },
+        "protocol": { "const": "bliss-guidance-jsonl-v2" },
         "capabilities": { "type": "array", "items": { "enum": ["global_candidate_guidance", "edge_candidate_guidance"] } },
         "channels": {
           "type": "array",
