@@ -14,8 +14,11 @@ guidance signals and diagnostics. Provider failures degrade to neutral guidance.
 SPI v2 distinguishes immutable, hash-bound evidence artifacts (for example
 Last.fm relations resolved by Better Call Bliss) from trusted read-only
 resources (for example Lyrion's `persist.db`). Preparation deliberately carries
-no full candidate inventory; providers see only the bounded candidates being
-scored, including `lms_urlmd5` when a provider needs Lyrion identity lookup.
+no full candidate inventory; it carries only job anchors and provider input.
+Providers see only the bounded candidates being scored, including `lms_urlmd5`
+when a provider needs Lyrion identity lookup. The anchors let a provider map
+the host's track context to its own identities, such as artist MBIDs to Last.fm
+artist source IDs, without changing the host's route IDs.
 
 The crate deliberately contains no LMS, Last.fm, Bliss database, or network
 implementation. It is the stable boundary shared by the current
@@ -28,3 +31,12 @@ normative JSONL schema is
 [`schemas/guidance-addon-spi-v2.schema.json`](schemas/guidance-addon-spi-v2.schema.json).
 Provider IDs identify guidance sources (for example `lastfm-guidance` and
 `playcount-guidance`); they are not network clients or scoring algorithms.
+
+## Related implementations
+
+- Host: [bliss-playlist-optimizer](https://github.com/chrober/bliss-playlist-optimizer)
+- Last.fm provider: [bliss-guidance-lastfm](https://github.com/chrober/bliss-guidance-lastfm)
+- Play-count provider: [bliss-guidance-playcounts](https://github.com/chrober/bliss-guidance-playcounts)
+
+Each provider owns only its data source. The host owns Bliss-first candidate
+admission, policy weighting, and the final selection objective.

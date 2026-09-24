@@ -73,8 +73,8 @@
       "type": "object",
       "required": ["candidate_id"],
       "properties": {
-        "candidate_id": { "type": "string", "minLength": 1 },
-        "lms_urlmd5": { "type": ["string", "null"], "minLength": 1 },
+        "candidate_id": { "type": "string", "minLength": 1, "description": "Stable host candidate identity. Signals may only name candidates from the current score batch." },
+        "lms_urlmd5": { "type": ["string", "null"], "minLength": 1, "description": "Optional Lyrion URL MD5 for bounded local-database lookup." },
         "database_file": { "type": ["string", "null"] },
         "title": { "type": ["string", "null"] },
         "artist": { "type": ["string", "null"] },
@@ -88,15 +88,15 @@
       "type": "object",
       "required": ["anchor_id", "candidate_id"],
       "properties": {
-        "anchor_id": { "type": "string", "minLength": 1 },
-        "candidate_id": { "type": "string", "minLength": 1 },
+        "anchor_id": { "type": "string", "minLength": 1, "description": "Host-owned track-context token referenced by ScoreContext; not a provider source identity." },
+        "candidate_id": { "type": "string", "minLength": 1, "description": "Host candidate identity for this anchored local track." },
         "lms_urlmd5": { "type": ["string", "null"], "minLength": 1 },
         "database_file": { "type": ["string", "null"] },
         "title": { "type": ["string", "null"] },
         "artist": { "type": ["string", "null"] },
         "album": { "type": ["string", "null"] },
-        "recording_mbid": { "type": ["string", "null"] },
-        "artist_mbids": { "type": "array", "items": { "type": "string" } }
+        "recording_mbid": { "type": ["string", "null"], "description": "Optional MusicBrainz recording ID for provider identity matching." },
+        "artist_mbids": { "type": "array", "items": { "type": "string" }, "description": "Optional MusicBrainz artist IDs. Providers should prefer these for entity translation before names." }
       },
       "additionalProperties": false
     },
@@ -105,9 +105,9 @@
       "required": ["scope"],
       "properties": {
         "scope": { "enum": ["global", "edge"] },
-        "left_anchor_id": { "type": ["string", "null"] },
-        "right_anchor_id": { "type": ["string", "null"] },
-        "context_track_ids": { "type": "array", "items": { "type": "string" } }
+        "left_anchor_id": { "type": ["string", "null"], "description": "Host anchor ID for the left endpoint of an edge." },
+        "right_anchor_id": { "type": ["string", "null"], "description": "Host anchor ID for the right endpoint of an edge." },
+        "context_track_ids": { "type": "array", "items": { "type": "string" }, "description": "Host anchor IDs forming the active global or route context." }
       },
       "additionalProperties": false
     },
