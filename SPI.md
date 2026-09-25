@@ -156,25 +156,25 @@ tracks.
 
 Providers return signals only for candidate IDs in that score request. A signal
 has a stable provider-defined `channel` such as `lastfm_track`,
-`lastfm_artist`, or `playcount`; a `scope`; `score` in `[-1, 1]`;
+`lastfm_artist`, `playcount`, `last_played`, or `library_age`; a `scope`; `score` in `[-1, 1]`;
 `confidence` in `[0, 1]`; and optional concise rationale and observation time.
 Omitting a candidate is neutral.
 
 ```json
 {
   "type":"scores",
-  "provider_id":"playcount-guidance",
+  "provider_id":"library-signals-guidance",
   "request_id":"gap-7-shortlist-1",
   "signals":[{"candidate_id":"bliss-row-42","channel":"playcount","scope":"global","score":-0.6,"confidence":1.0,"rationale":"LMS play-count percentile 0.200"}],
   "diagnostics":{"state":"fresh","request_count":2,"failure_count":0}
 }
 ```
 
-### Worked Better Call Bliss job: Last.fm plus play counts
+### Worked Better Call Bliss job: Last.fm plus local library signals
 
 The following is a shortened but wire-valid transcript from one realistic
 Better Call Bliss addition or bridge decision. It shows two separate provider
-sessions: Last.fm receives a frozen artifact; play counts receive a frozen
+sessions: Last.fm receives a frozen artifact; local library signals receive a frozen
 candidate-identity artifact and a read-only Lyrion database resource. Paths,
 hashes, titles, and IDs are representative placeholders.
 
@@ -237,7 +237,7 @@ representative response is:
 }
 ```
 
-**Host -> `bliss-guidance-playcounts`: prepare**
+**Host -> `bliss-guidance-library-signals`: prepare**
 
 ```json
 {
@@ -262,20 +262,22 @@ representative response is:
 }
 ```
 
-The play-count provider verifies the identity artifact, opens one read-only
-SQLite snapshot, and builds only its eligible-population distribution. It does
-not receive an exported library-wide play-count map.
+The local-library-signals provider verifies the identity artifact, opens one
+read-only SQLite snapshot, and builds three eligible-population distributions:
+`playcount`, `last_played`, and `library_age`. It does not receive an exported
+library-wide value map. A missing persistence row is neutral; `lastPlayed = 0`
+is the oldest recency value and a missing `added` value omits `library_age`.
 
 ```json
 {
   "type":"prepared",
-  "provider_id":"playcount-guidance",
+  "provider_id":"library-signals-guidance",
   "snapshot_id":"sqlite:c2865b8f478a388f:64128",
   "diagnostics":{
     "state":"fresh",
     "request_count":1,
     "failure_count":0,
-    "details":{"eligible_candidates":64128,"known_counts":51890,"zero_counts":12238,"distinct_play_counts":247}
+    "details":{"eligible_candidates":64128,"known_playcounts":51890,"known_last_played":51890,"known_library_age":51742}
   }
 }
 ```
@@ -321,12 +323,12 @@ context to both providers:
 }
 ```
 
-**`bliss-guidance-playcounts` -> host: scores**
+**`bliss-guidance-library-signals` -> host: scores**
 
 ```json
 {
   "type":"scores",
-  "provider_id":"playcount-guidance",
+  "provider_id":"library-signals-guidance",
   "request_id":"gap-4-shortlist-1",
   "signals":[
     {

@@ -30,13 +30,13 @@ semantics, compatibility rules, failure behavior, and worked examples. The
 normative JSONL schema is
 [`schemas/guidance-addon-spi-v2.schema.json`](schemas/guidance-addon-spi-v2.schema.json).
 Provider IDs identify guidance sources (for example `lastfm-guidance` and
-`playcount-guidance`); they are not network clients or scoring algorithms.
+`library-signals-guidance`); they are not network clients or scoring algorithms.
 
 ## Related implementations
 
 - Host: [bliss-playlist-optimizer](https://github.com/chrober/bliss-playlist-optimizer)
 - Last.fm provider: [bliss-guidance-lastfm](https://github.com/chrober/bliss-guidance-lastfm)
-- Play-count provider: [bliss-guidance-playcounts](https://github.com/chrober/bliss-guidance-playcounts)
+- Local library-signals provider: [bliss-guidance-library-signals](https://github.com/chrober/bliss-guidance-library-signals)
 
 Each provider owns only its data source. The host owns Bliss-first candidate
 admission, policy weighting, and the final selection objective.
