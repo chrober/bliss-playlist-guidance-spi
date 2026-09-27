@@ -132,6 +132,11 @@
                 "type": "array",
                 "minItems": 1,
                 "items": { "enum": ["global", "edge"] }
+              },
+              "supported_host_policies": {
+                "type": "array",
+                "items": { "enum": ["bounded_influence", "target_share"] },
+                "description": "Host-owned selection policies this provider channel supports."
               }
             },
             "additionalProperties": false

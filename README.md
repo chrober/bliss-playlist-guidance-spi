@@ -11,6 +11,12 @@ host owns discovery, bounded score batching, guidance aggregation, hard
 eligibility, and its own selection objective. An addon only returns bounded
 guidance signals and diagnostics. Provider failures degrade to neutral guidance.
 
+Provider channels may declare which host policies can consume their raw
+observations. This keeps the source-specific provider independent of selection
+math: `bounded_influence` applies a small signed per-candidate adjustment,
+whereas `target_share` calibrates supported candidates within an existing
+Bliss-qualified pool. Neither policy can admit a candidate that Bliss rejected.
+
 SPI v2 distinguishes immutable, hash-bound evidence artifacts (for example
 Last.fm relations resolved by Better Call Bliss) from trusted read-only
 resources (for example Lyrion's `persist.db`). Preparation deliberately carries

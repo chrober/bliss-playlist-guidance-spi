@@ -9,6 +9,8 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+pub mod policy;
+
 pub const SPI_VERSION: u16 = 2;
 pub const PROTOCOL_NAME: &str = "bliss-guidance-jsonl-v2";
 
@@ -91,6 +93,10 @@ pub enum Capability {
 pub struct ChannelDescriptor {
     pub channel: String,
     pub scopes: Vec<GuidanceScope>,
+    /// Host policies this provider channel can safely support. An empty list
+    /// means that the provider made no capability claim.
+    #[serde(default)]
+    pub supported_host_policies: Vec<policy::HostPolicyKind>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -210,6 +216,82 @@ pub fn decode_response(line: &str) -> Result<GuidanceResponse, serde_json::Error
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::policy::{
+        bounded_multiplier, saturating_time_signal, target_share_multiplier,
+        AppliedGuidanceContribution, GuidancePolicyEntry, HostPolicyKind,
+    };
+
+    #[test]
+    fn shared_policy_clamps_orders_and_reports_bounded_contributions() {
+        let entries = vec![
+            GuidancePolicyEntry {
+                provider_id: "lastfm-guidance".into(),
+                channel: "lastfm_artist".into(),
+                weight: 4.0,
+                target_percent: None,
+            },
+            GuidancePolicyEntry {
+                provider_id: "library-signals".into(),
+                channel: "playcount".into(),
+                weight: -4.0,
+                target_percent: None,
+            },
+        ];
+
+        let contributions = AppliedGuidanceContribution::from_policy_entries(&entries, 0.5, 0.8);
+        assert_eq!(contributions.len(), 2);
+        assert_eq!(contributions[0].provider_id, "lastfm-guidance");
+        assert_eq!(contributions[1].provider_id, "library-signals");
+        assert!((contributions[0].multiplier - bounded_multiplier(1.0, 0.4)).abs() < 1e-12);
+        assert!((contributions[1].multiplier - bounded_multiplier(-1.0, 0.4)).abs() < 1e-12);
+    }
+
+    #[test]
+    fn shared_policy_uses_lab_exponential_time_signal() {
+        let horizon = 10 * 86_400;
+        assert_eq!(
+            saturating_time_signal(None, 1_000_000, horizon, false),
+            None
+        );
+        assert_eq!(
+            saturating_time_signal(Some(0), 1_000_000, horizon, true),
+            Some(-1.0)
+        );
+        assert_eq!(
+            saturating_time_signal(Some(1_000_001), 1_000_000, horizon, false),
+            Some(1.0)
+        );
+
+        let at_horizon =
+            saturating_time_signal(Some(1_000_000 - horizon), 1_000_000, horizon, false).unwrap();
+        assert!((at_horizon - ((2.0 * (-1.0_f64).exp()) - 1.0)).abs() < 1e-12);
+    }
+
+    #[test]
+    fn shared_policy_calculates_sparse_target_share_multiplier() {
+        let multiplier = target_share_multiplier(75, 0.2, 1.8);
+        assert!(multiplier > 1.0);
+        assert_eq!(target_share_multiplier(0, 0.2, 1.8), 1.0);
+        assert_eq!(target_share_multiplier(75, 0.0, 1.8), 1.0);
+    }
+
+    #[test]
+    fn manifest_declares_host_policy_capability_per_channel() {
+        let channel = ChannelDescriptor {
+            channel: "lastfm_artist".into(),
+            scopes: vec![GuidanceScope::Global, GuidanceScope::Edge],
+            supported_host_policies: vec![
+                HostPolicyKind::BoundedInfluence,
+                HostPolicyKind::TargetShare,
+            ],
+        };
+
+        let decoded: ChannelDescriptor = serde_json::from_str(&encode(&channel).unwrap()).unwrap();
+        assert_eq!(
+            decoded.supported_host_policies,
+            channel.supported_host_policies
+        );
+    }
 
     #[test]
     fn score_request_round_trips_as_jsonl() {
@@ -364,6 +446,7 @@ mod tests {
             channels: vec![ChannelDescriptor {
                 channel: "preference".into(),
                 scopes: vec![GuidanceScope::Global],
+                supported_host_policies: vec![policy::HostPolicyKind::BoundedInfluence],
             }],
             required_context: vec![],
             configuration_schema: None,

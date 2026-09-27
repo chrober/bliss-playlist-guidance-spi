@@ -76,6 +76,14 @@ The manifest must report SPI version `2`, protocol `bliss-guidance-jsonl-v2`, a
 stable provider ID, version, and capabilities. The host disables a provider
 whose manifest does not match its trusted configuration.
 
+Each channel may also declare `supported_host_policies`. This describes how a
+host may consume the channel's raw observation; it never gives the provider
+authority to rank candidates. `bounded_influence` applies a signed bounded
+boost or penalty to one candidate. `target_share` calibrates supported
+candidates to a requested share within the host's already Bliss-qualified
+pool. A host must not silently substitute one policy for another when a
+provider does not declare support.
+
 ### Prepare
 
 `prepare` supplies provider options, hash-bound artifacts, trusted resources,
