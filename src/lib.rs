@@ -1,16 +1,16 @@
 //! Provider-neutral SPI shared by `bliss-playlist-optimizer` and guidance addons.
 //!
-//! The wire format is newline-delimited JSON (JSONL).  An optimizer starts an
-//! addon, sends a `describe` request, then a job-scoped `prepare` request and
+//! The wire format is newline-delimited JSON (JSONL). A host starts an addon,
+//! sends a `describe` request, then a job-scoped `prepare` request and
 //! zero or more batched `score` requests.  Addons never decide hard
 //! eligibility: they only return bounded guidance signals for candidates that
-//! the optimizer has already admitted to a scoring batch.
+//! the host has already admitted to a scoring batch.
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-pub const SPI_VERSION: u16 = 1;
-pub const PROTOCOL_NAME: &str = "bliss-playlist-optimizer-guidance-jsonl";
+pub const SPI_VERSION: u16 = 2;
+pub const PROTOCOL_NAME: &str = "bliss-guidance-jsonl-v2";
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -22,7 +22,8 @@ pub enum GuidanceRequest {
         spi_version: u16,
         job_id: String,
         options: Value,
-        candidates: Vec<Candidate>,
+        artifacts: Vec<ArtifactDescriptor>,
+        resources: Vec<ResourceDescriptor>,
         anchors: Vec<Anchor>,
     },
     Score {
@@ -69,6 +70,7 @@ pub struct Manifest {
     pub provider_version: String,
     pub protocol: String,
     pub capabilities: Vec<Capability>,
+    pub channels: Vec<ChannelDescriptor>,
     #[serde(default)]
     pub required_context: Vec<String>,
     #[serde(default)]
@@ -82,9 +84,20 @@ pub enum Capability {
     EdgeCandidateGuidance,
 }
 
+/// A provider-local, stable signal channel and the guidance scopes in which
+/// the provider can emit it. Hosts identify a policy by the pair of provider
+/// ID and this channel name, never by a globally reserved channel string.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ChannelDescriptor {
+    pub channel: String,
+    pub scopes: Vec<GuidanceScope>,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct Candidate {
     pub candidate_id: String,
+    #[serde(default)]
+    pub lms_urlmd5: Option<String>,
     #[serde(default)]
     pub database_file: Option<String>,
     #[serde(default)]
@@ -97,6 +110,26 @@ pub struct Candidate {
     pub recording_mbid: Option<String>,
     #[serde(default)]
     pub artist_mbids: Vec<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ArtifactDescriptor {
+    pub kind: String,
+    pub path: String,
+    pub sha256: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ResourceDescriptor {
+    pub kind: String,
+    pub path: String,
+    pub access: ResourceAccess,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ResourceAccess {
+    ReadOnly,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -127,6 +160,9 @@ pub enum GuidanceScope {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct GuidanceSignal {
     pub candidate_id: String,
+    /// Stable provider-defined channel, for example `lastfm_track`,
+    /// `lastfm_artist`, or `playcount`.
+    pub channel: String,
     pub scope: GuidanceScope,
     /// Normalized contribution in [-1, 1]. Positive values support a
     /// candidate, negative values penalize it, and zero is neutral.
@@ -188,6 +224,7 @@ mod tests {
             },
             candidates: vec![Candidate {
                 candidate_id: "bliss-row-42".into(),
+                lms_urlmd5: None,
                 database_file: Some("/music/a.mp3".into()),
                 title: Some("A song".into()),
                 artist: Some("An artist".into()),
@@ -205,6 +242,7 @@ mod tests {
     fn signals_are_bounded() {
         let signal = GuidanceSignal {
             candidate_id: "c".into(),
+            channel: "playcount".into(),
             scope: GuidanceScope::Global,
             score: 4.0,
             confidence: -2.0,
@@ -214,5 +252,124 @@ mod tests {
         .bounded();
         assert_eq!(signal.score, 1.0);
         assert_eq!(signal.confidence, 0.0);
+    }
+
+    #[test]
+    fn guidance_signal_round_trips_a_stable_channel() {
+        let signal = GuidanceSignal {
+            candidate_id: "bliss-row-42".into(),
+            channel: "lastfm_track".into(),
+            scope: GuidanceScope::Edge,
+            score: 0.75,
+            confidence: 0.9,
+            rationale: Some("similar recording".into()),
+            observed_at: None,
+        };
+
+        let decoded: GuidanceSignal = serde_json::from_str(&encode(&signal).unwrap()).unwrap();
+        assert_eq!(decoded.channel, "lastfm_track");
+    }
+
+    #[test]
+    fn prepare_round_trips_artifacts_and_resources_without_candidate_inventory() {
+        let request = GuidanceRequest::Prepare {
+            spi_version: 2,
+            job_id: "preview-42".into(),
+            options: serde_json::json!({"preference_percent": -40}),
+            artifacts: vec![ArtifactDescriptor {
+                kind: "resolved-lastfm-evidence-v1".into(),
+                path: "/private/job/semantic-evidence.json".into(),
+                sha256: "a".repeat(64),
+            }],
+            resources: vec![ResourceDescriptor {
+                kind: "lms-persist-sqlite-v1".into(),
+                path: "/private/lms/persist.db".into(),
+                access: ResourceAccess::ReadOnly,
+            }],
+            anchors: vec![],
+        };
+
+        let encoded = encode(&request).unwrap();
+        assert!(!encoded.contains("candidates"));
+        assert_eq!(decode_request(&encoded).unwrap(), request);
+    }
+
+    #[test]
+    fn score_candidate_preserves_lms_urlmd5() {
+        let request = GuidanceRequest::Score {
+            spi_version: 2,
+            request_id: "batch-1".into(),
+            context: ScoreContext {
+                scope: GuidanceScope::Global,
+                left_anchor_id: None,
+                right_anchor_id: None,
+                context_track_ids: vec![],
+            },
+            candidates: vec![Candidate {
+                candidate_id: "bliss-row-42".into(),
+                lms_urlmd5: Some("aabbcc".into()),
+                database_file: None,
+                title: None,
+                artist: None,
+                album: None,
+                recording_mbid: None,
+                artist_mbids: vec![],
+            }],
+        };
+
+        let decoded = decode_request(&encode(&request).unwrap()).unwrap();
+        let GuidanceRequest::Score { candidates, .. } = decoded else {
+            panic!("expected a score request");
+        };
+        assert_eq!(candidates[0].lms_urlmd5.as_deref(), Some("aabbcc"));
+    }
+
+    #[test]
+    fn v2_schema_declares_candidate_free_prepare() {
+        let schema: Value =
+            serde_json::from_str(include_str!("../schemas/guidance-addon-spi-v2.schema.json"))
+                .unwrap();
+        let prepare = &schema["$defs"]["prepare"];
+        assert!(prepare["required"]
+            .as_array()
+            .unwrap()
+            .contains(&Value::String("artifacts".into())));
+        assert!(prepare["required"]
+            .as_array()
+            .unwrap()
+            .contains(&Value::String("resources".into())));
+        assert!(prepare["properties"].get("candidates").is_none());
+    }
+
+    #[test]
+    fn v2_protocol_name_is_host_neutral() {
+        assert_eq!(PROTOCOL_NAME, "bliss-guidance-jsonl-v2");
+        let schema: Value =
+            serde_json::from_str(include_str!("../schemas/guidance-addon-spi-v2.schema.json"))
+                .unwrap();
+        assert_eq!(
+            schema["$defs"]["manifest"]["properties"]["protocol"]["const"],
+            Value::String(PROTOCOL_NAME.into()),
+        );
+    }
+
+    #[test]
+    fn manifest_round_trips_provider_local_channel_scopes() {
+        let manifest = Manifest {
+            spi_version: SPI_VERSION,
+            provider_id: "fixture-guidance".into(),
+            provider_version: "1.0.0".into(),
+            protocol: PROTOCOL_NAME.into(),
+            capabilities: vec![Capability::GlobalCandidateGuidance],
+            channels: vec![ChannelDescriptor {
+                channel: "preference".into(),
+                scopes: vec![GuidanceScope::Global],
+            }],
+            required_context: vec![],
+            configuration_schema: None,
+        };
+
+        let decoded: Manifest = serde_json::from_str(&encode(&manifest).unwrap()).unwrap();
+        assert_eq!(decoded.channels, manifest.channels);
     }
 }
