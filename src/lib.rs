@@ -179,6 +179,11 @@ pub struct GuidanceSignal {
     pub rationale: Option<String>,
     #[serde(default)]
     pub observed_at: Option<String>,
+    /// Optional structured raw observation.  Providers may expose bounded
+    /// evidence such as a play count or timestamp so a host can retain an
+    /// existing presentation without rereading the provider's data source.
+    #[serde(default)]
+    pub observation: Option<Value>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
@@ -330,6 +335,7 @@ mod tests {
             confidence: -2.0,
             rationale: None,
             observed_at: None,
+            observation: None,
         }
         .bounded();
         assert_eq!(signal.score, 1.0);
@@ -346,10 +352,12 @@ mod tests {
             confidence: 0.9,
             rationale: Some("similar recording".into()),
             observed_at: None,
+            observation: Some(serde_json::json!({"recording_mbid": "fixture"})),
         };
 
         let decoded: GuidanceSignal = serde_json::from_str(&encode(&signal).unwrap()).unwrap();
         assert_eq!(decoded.channel, "lastfm_track");
+        assert_eq!(decoded.observation, signal.observation);
     }
 
     #[test]
