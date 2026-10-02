@@ -37,6 +37,25 @@ playlist, web form, or other untrusted request input. The host uses finite
 timeouts; malformed responses, timeouts, and provider failures disable only
 that provider and leave Bliss-only routing available.
 
+## Native host request and selection trace
+
+When a native Bliss host owns a provider process, its Lyrion-facing caller
+passes a trusted `guidance_host_request_v1` envelope: a job/request ID,
+deadline, provider executable configuration, the bounded candidate batch, and
+the normal score context. This is not a provider request and is never derived
+from browser input. The native host translates it into the normal JSONL
+`describe`, `prepare`, `score`, and `close` lifecycle.
+
+The result may include `selection_trace_v1`. It contains structured candidate
+facts: optional Bliss similarity, host policy, the raw signed contributions
+and observations returned by the provider, and reserved final-selection facts
+(`final_score`, dominant boost, stochastic key, and cutoff). It never contains
+rendered log lines. In the first `bliss-mixer` Library Signals slice, Lab still
+owns final selection, so those reserved final-selection fields are absent and
+Lab renders its existing log lines from the returned signals unchanged.
+The normative envelope schema is
+[`schemas/guidance-host-v1.schema.json`](schemas/guidance-host-v1.schema.json).
+
 ## Lifecycle
 
 ```mermaid

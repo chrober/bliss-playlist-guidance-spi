@@ -198,6 +198,95 @@ pub struct Diagnostics {
     pub details: Option<Value>,
 }
 
+/// Host-to-host description of one bounded native guidance request.
+///
+/// This envelope is deliberately separate from the provider JSONL messages.
+/// A Lyrion host constructs it from trusted provider configuration and sends
+/// it to a native Bliss host; the native host then owns the provider process
+/// lifecycle.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct GuidanceHostRequestV1 {
+    pub request_version: String,
+    pub job_id: String,
+    pub request_id: String,
+    pub deadline_ms: u64,
+    pub provider: GuidanceProviderConfig,
+    /// Host-owned policy used solely to explain signed provider contributions.
+    #[serde(default)]
+    pub policy: Value,
+    pub context: ScoreContext,
+    pub candidates: Vec<Candidate>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct GuidanceProviderConfig {
+    pub provider_id: String,
+    pub program: String,
+    #[serde(default)]
+    pub argv: Vec<String>,
+    #[serde(default)]
+    pub options: Value,
+    #[serde(default)]
+    pub artifacts: Vec<ArtifactDescriptor>,
+    #[serde(default)]
+    pub resources: Vec<ResourceDescriptor>,
+}
+
+/// Structured data behind one candidate's guidance explanation. It never
+/// contains rendered LMS log text; the Perl host retains that responsibility.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct SelectionTraceV1 {
+    pub trace_version: String,
+    pub provider_id: String,
+    pub host: String,
+    #[serde(default)]
+    pub policy: Value,
+    pub candidates: Vec<SelectionTraceCandidate>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct SelectionTraceCandidate {
+    pub candidate_id: String,
+    #[serde(default)]
+    pub bliss_similarity: Option<f64>,
+    #[serde(default)]
+    pub guidance: Vec<SelectionTraceContribution>,
+    /// Reserved for a future native final-selection host. This first slice
+    /// leaves it absent so Lab can retain its established selection formatter.
+    #[serde(default)]
+    pub final_score: Option<f64>,
+    #[serde(default)]
+    pub dominant_boost: Option<String>,
+    #[serde(default)]
+    pub stochastic_key: Option<f64>,
+    #[serde(default)]
+    pub cutoff: Option<f64>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct SelectionTraceContribution {
+    pub channel: String,
+    pub score: f64,
+    pub confidence: f64,
+    pub contribution: f64,
+    #[serde(default)]
+    pub observation: Option<Value>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct GuidanceHostResponseV1 {
+    pub response_version: String,
+    pub valid: bool,
+    #[serde(default)]
+    pub signals: Vec<GuidanceSignal>,
+    #[serde(default)]
+    pub diagnostics: Diagnostics,
+    #[serde(default)]
+    pub selection_trace: Option<SelectionTraceV1>,
+    #[serde(default)]
+    pub diagnostic: String,
+}
+
 impl GuidanceSignal {
     pub fn bounded(mut self) -> Self {
         self.score = self.score.clamp(-1.0, 1.0);
@@ -462,5 +551,33 @@ mod tests {
 
         let decoded: Manifest = serde_json::from_str(&encode(&manifest).unwrap()).unwrap();
         assert_eq!(decoded.channels, manifest.channels);
+    }
+
+    #[test]
+    fn library_signals_selection_trace_fixture_round_trips_without_rendered_log_text() {
+        let fixture: SelectionTraceV1 = serde_json::from_str(include_str!(
+            "../fixtures/selection-trace-v1-library-signals.json"
+        ))
+        .expect("Library Signals selection trace fixture must be valid");
+
+        assert_eq!(fixture.trace_version, "selection_trace_v1");
+        assert_eq!(fixture.provider_id, "library-signals-guidance");
+        assert_eq!(fixture.candidates.len(), 1);
+        assert_eq!(fixture.candidates[0].candidate_id, "file:///music/example.flac");
+        assert_eq!(fixture.candidates[0].guidance.len(), 3);
+        assert!(!encode(&fixture)
+            .expect("trace encodes")
+            .contains("Candidate selection:"));
+    }
+
+    #[test]
+    fn library_signals_host_request_fixture_round_trips() {
+        let fixture: GuidanceHostRequestV1 = serde_json::from_str(include_str!(
+            "../fixtures/guidance-host-request-v1-library-signals.json"
+        ))
+        .expect("Library Signals host request fixture must be valid");
+        assert_eq!(fixture.request_version, "guidance_host_request_v1");
+        assert_eq!(fixture.provider.provider_id, "library-signals-guidance");
+        assert_eq!(fixture.candidates[0].lms_urlmd5.as_deref(), Some("aabbcc"));
     }
 }
