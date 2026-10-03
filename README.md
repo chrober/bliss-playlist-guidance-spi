@@ -28,8 +28,12 @@ artist source IDs, without changing the host's route IDs.
 
 The crate deliberately contains no LMS, Last.fm, Bliss database, or network
 implementation. It is the stable boundary shared by the current
-`bliss-playlist-optimizer` multi-step pathfinding host and a future
-`bliss-mixer` DSTM-candidate-ranking host, plus provider repositories.
+`bliss-playlist-optimizer` multi-step pathfinding host, the `bliss-mixer`
+native guidance-host endpoint, and provider repositories. The first
+`bliss-mixer` Library Signals vertical slice exposes bounded scoring and
+`selection_trace_v1`. When a native provider is enabled, Bliss Mixer Lab
+already sends its bounded DSTM candidate pool to that endpoint; Lab retains its
+own selection policy and log formatter.
 
 Read [SPI.md](SPI.md) for the complete lifecycle, JSONL messages, field
 semantics, compatibility rules, failure behavior, and worked examples. The
@@ -42,7 +46,7 @@ Provider IDs identify guidance sources (for example `lastfm-guidance` and
 
 - Host: [bliss-playlist-optimizer](https://github.com/chrober/bliss-playlist-optimizer)
 - Last.fm provider: [bliss-guidance-lastfm](https://github.com/chrober/bliss-guidance-lastfm)
-- Local library-signals provider: [bliss-guidance-library-signals](https://github.com/chrober/bliss-guidance-library-signals)
+- Local library-signals provider: [lms-guidance-library-signals](https://github.com/chrober/lms-guidance-library-signals)
 
 Each provider owns only its data source. The host owns Bliss-first candidate
 admission, policy weighting, and the final selection objective.
