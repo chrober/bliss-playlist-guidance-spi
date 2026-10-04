@@ -6,6 +6,15 @@ Independent addons can contribute global candidate preferences (for example
 play-count preference) or contextual edge guidance (for example a Last.fm
 relationship for a particular transition).
 
+## Current integration status
+
+The SPI v2 contract is used by the released Library Signals and Last.fm
+artifact-mode providers. Library Signals reads a trusted, read-only
+`persist.db`; Last.fm currently consumes a hash-bound artifact prepared by the
+Lyrion host and LastMix. Direct Last.fm API-key acquisition is not part of the
+released native contract path yet. `bliss-playlist-optimizer` and the native
+`bliss-mixer` guidance endpoint are the current hosts.
+
 The current wire contract is **SPI v2**, versioned JSONL over stdin/stdout. The
 host owns discovery, bounded score batching, guidance aggregation, hard
 eligibility, and its own selection objective. An addon only returns bounded

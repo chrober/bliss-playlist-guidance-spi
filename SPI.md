@@ -2,8 +2,8 @@
 
 `bliss-playlist-guidance-spi` defines the provider-neutral, JSONL process
 boundary between a Bliss-first **host** and optional guidance providers. The
-current host is `bliss-playlist-optimizer`; a later `bliss-mixer` host may use
-the identical contract while ranking its DSTM candidate pool. The normative
+current hosts include `bliss-playlist-optimizer` and the native `bliss-mixer`
+guidance endpoint, which ranks an existing DSTM candidate pool. The normative
 machine-readable contract is
 [`schemas/guidance-addon-spi-v2.schema.json`](schemas/guidance-addon-spi-v2.schema.json).
 
