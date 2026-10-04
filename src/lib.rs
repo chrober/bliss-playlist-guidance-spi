@@ -563,7 +563,10 @@ mod tests {
         assert_eq!(fixture.trace_version, "selection_trace_v1");
         assert_eq!(fixture.provider_id, "library-signals-guidance");
         assert_eq!(fixture.candidates.len(), 1);
-        assert_eq!(fixture.candidates[0].candidate_id, "file:///music/example.flac");
+        assert_eq!(
+            fixture.candidates[0].candidate_id,
+            "file:///music/example.flac"
+        );
         assert_eq!(fixture.candidates[0].guidance.len(), 3);
         assert!(!encode(&fixture)
             .expect("trace encodes")
