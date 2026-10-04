@@ -132,6 +132,11 @@
                 "type": "array",
                 "minItems": 1,
                 "items": { "enum": ["global", "edge"] }
+              },
+              "supported_host_policies": {
+                "type": "array",
+                "items": { "enum": ["bounded_influence", "target_share"] },
+                "description": "Host-owned selection policies this provider channel supports."
               }
             },
             "additionalProperties": false
@@ -207,6 +212,48 @@
         "code": { "type": "string", "minLength": 1 },
         "message": { "type": "string", "minLength": 1 },
         "retryable": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "selection_trace_v1": {
+      "type": "object",
+      "required": ["trace_version", "provider_id", "host", "policy", "candidates"],
+      "properties": {
+        "trace_version": { "const": "selection_trace_v1" },
+        "provider_id": { "type": "string", "minLength": 1 },
+        "host": { "type": "string", "minLength": 1 },
+        "policy": { "type": "object" },
+        "candidates": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["candidate_id", "guidance"],
+            "properties": {
+              "candidate_id": { "type": "string", "minLength": 1 },
+              "bliss_similarity": { "type": ["number", "null"] },
+              "guidance": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["channel", "score", "confidence", "contribution"],
+                  "properties": {
+                    "channel": { "type": "string", "minLength": 1 },
+                    "score": { "type": "number", "minimum": -1, "maximum": 1 },
+                    "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+                    "contribution": { "type": "number", "minimum": -1, "maximum": 1 },
+                    "observation": {}
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "final_score": { "type": ["number", "null"] },
+              "dominant_boost": { "type": ["string", "null"] },
+              "stochastic_key": { "type": ["number", "null"] },
+              "cutoff": { "type": ["number", "null"] }
+            },
+            "additionalProperties": false
+          }
+        }
       },
       "additionalProperties": false
     }

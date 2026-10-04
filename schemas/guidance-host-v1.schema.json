@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/chrober/bliss-playlist-guidance-spi/schemas/guidance-host-v1.schema.json",
+  "title": "Bliss native guidance-host request and response v1",
+  "oneOf": [
+    { "$ref": "#/$defs/request" },
+    { "$ref": "#/$defs/response" }
+  ],
+  "$defs": {
+    "request": {
+      "type": "object",
+      "required": ["request_version", "job_id", "request_id", "deadline_ms", "provider", "policy", "context", "candidates"],
+      "properties": {
+        "request_version": { "const": "guidance_host_request_v1" },
+        "job_id": { "type": "string", "minLength": 1 },
+        "request_id": { "type": "string", "minLength": 1 },
+        "deadline_ms": { "type": "integer", "minimum": 1 },
+        "provider": { "$ref": "#/$defs/provider" },
+        "policy": { "type": "object" },
+        "context": { "$ref": "guidance-addon-spi-v2.schema.json#/$defs/score_context" },
+        "candidates": { "type": "array", "items": { "$ref": "guidance-addon-spi-v2.schema.json#/$defs/candidate" } }
+      },
+      "additionalProperties": false
+    },
+    "provider": {
+      "type": "object",
+      "required": ["provider_id", "program", "argv", "options", "artifacts", "resources"],
+      "properties": {
+        "provider_id": { "type": "string", "minLength": 1 },
+        "program": { "type": "string", "minLength": 1 },
+        "argv": { "type": "array", "items": { "type": "string" } },
+        "options": { "type": "object" },
+        "artifacts": { "type": "array", "items": { "$ref": "guidance-addon-spi-v2.schema.json#/$defs/artifact_descriptor" } },
+        "resources": { "type": "array", "items": { "$ref": "guidance-addon-spi-v2.schema.json#/$defs/resource_descriptor" } }
+      },
+      "additionalProperties": false
+    },
+    "response": {
+      "type": "object",
+      "required": ["response_version", "valid", "signals", "diagnostics", "selection_trace", "diagnostic"],
+      "properties": {
+        "response_version": { "const": "guidance_host_response_v1" },
+        "valid": { "type": "boolean" },
+        "signals": { "type": "array", "items": { "$ref": "guidance-addon-spi-v2.schema.json#/$defs/guidance_signal" } },
+        "diagnostics": { "$ref": "guidance-addon-spi-v2.schema.json#/$defs/diagnostics" },
+        "selection_trace": { "anyOf": [{ "$ref": "guidance-addon-spi-v2.schema.json#/$defs/selection_trace_v1" }, { "type": "null" }] },
+        "diagnostic": { "type": "string" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

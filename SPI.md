@@ -2,8 +2,8 @@
 
 `bliss-playlist-guidance-spi` defines the provider-neutral, JSONL process
 boundary between a Bliss-first **host** and optional guidance providers. The
-current host is `bliss-playlist-optimizer`; a later `bliss-mixer` host may use
-the identical contract while ranking its DSTM candidate pool. The normative
+current hosts include `bliss-playlist-optimizer` and the native `bliss-mixer`
+guidance endpoint, which ranks an existing DSTM candidate pool. The normative
 machine-readable contract is
 [`schemas/guidance-addon-spi-v2.schema.json`](schemas/guidance-addon-spi-v2.schema.json).
 
@@ -36,6 +36,25 @@ policy are trusted integration configuration. They must never be copied from a
 playlist, web form, or other untrusted request input. The host uses finite
 timeouts; malformed responses, timeouts, and provider failures disable only
 that provider and leave Bliss-only routing available.
+
+## Native host request and selection trace
+
+When a native Bliss host owns a provider process, its Lyrion-facing caller
+passes a trusted `guidance_host_request_v1` envelope: a job/request ID,
+deadline, provider executable configuration, the bounded candidate batch, and
+the normal score context. This is not a provider request and is never derived
+from browser input. The native host translates it into the normal JSONL
+`describe`, `prepare`, `score`, and `close` lifecycle.
+
+The result may include `selection_trace_v1`. It contains structured candidate
+facts: optional Bliss similarity, host policy, the raw signed contributions
+and observations returned by the provider, and reserved final-selection facts
+(`final_score`, dominant boost, stochastic key, and cutoff). It never contains
+rendered log lines. In the first `bliss-mixer` Library Signals slice, Lab still
+owns final selection, so those reserved final-selection fields are absent and
+Lab renders its existing log lines from the returned signals unchanged.
+The normative envelope schema is
+[`schemas/guidance-host-v1.schema.json`](schemas/guidance-host-v1.schema.json).
 
 ## Lifecycle
 
@@ -75,6 +94,14 @@ The host starts a session with:
 The manifest must report SPI version `2`, protocol `bliss-guidance-jsonl-v2`, a
 stable provider ID, version, and capabilities. The host disables a provider
 whose manifest does not match its trusted configuration.
+
+Each channel may also declare `supported_host_policies`. This describes how a
+host may consume the channel's raw observation; it never gives the provider
+authority to rank candidates. `bounded_influence` applies a signed bounded
+boost or penalty to one candidate. `target_share` calibrates supported
+candidates to a requested share within the host's already Bliss-qualified
+pool. A host must not silently substitute one policy for another when a
+provider does not declare support.
 
 ### Prepare
 

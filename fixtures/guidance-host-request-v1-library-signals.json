@@ -1,0 +1,47 @@
+{
+  "request_version": "guidance_host_request_v1",
+  "job_id": "blissmixerlab",
+  "request_id": "dstm-candidate-pool",
+  "deadline_ms": 500,
+  "provider": {
+    "provider_id": "library-signals-guidance",
+    "program": "/trusted/bliss-guidance-library-signals",
+    "argv": [],
+    "options": {
+      "as_of_unix_seconds": 1800000000,
+      "last_played_horizon_days": 180,
+      "library_age_horizon_days": 365
+    },
+    "artifacts": [{
+      "kind": "eligible-candidate-identities-v1",
+      "path": "/trusted/eligible-candidates.json",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }],
+    "resources": [{
+      "kind": "lms-persist-sqlite-v1",
+      "path": "/trusted/persist.db",
+      "access": "read_only"
+    }]
+  },
+  "policy": {
+    "playcount_influence": -80,
+    "last_played_influence": -60,
+    "library_age_influence": 70
+  },
+  "context": {
+    "scope": "global",
+    "left_anchor_id": null,
+    "right_anchor_id": null,
+    "context_track_ids": []
+  },
+  "candidates": [{
+    "candidate_id": "file:///music/example.flac",
+    "lms_urlmd5": "aabbcc",
+    "database_file": null,
+    "title": null,
+    "artist": null,
+    "album": null,
+    "recording_mbid": null,
+    "artist_mbids": []
+  }]
+}
