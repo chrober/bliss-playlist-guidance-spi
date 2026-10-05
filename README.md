@@ -53,9 +53,9 @@ Provider IDs identify guidance sources (for example `lastfm-guidance` and
 
 ## Related implementations
 
-- Host: [bliss-playlist-optimizer](https://github.com/chrober/bliss-playlist-optimizer)
-- Last.fm provider: [bliss-guidance-lastfm](https://github.com/chrober/bliss-guidance-lastfm)
-- Local library-signals provider: [lms-guidance-library-signals](https://github.com/chrober/lms-guidance-library-signals)
+- Host: [`bliss-playlist-optimizer`](https://github.com/chrober/bliss-playlist-optimizer)
+- Last.fm provider: [`bliss-guidance-lastfm`](https://github.com/chrober/bliss-guidance-lastfm)
+- Local library-signals provider: [`lms-guidance-library-signals`](https://github.com/chrober/lms-guidance-library-signals)
 
 Each provider owns only its data source. The host owns Bliss-first candidate
 admission, policy weighting, and the final selection objective.
