@@ -214,6 +214,10 @@ pub struct GuidanceHostRequestV1 {
     /// Host-owned policy used solely to explain signed provider contributions.
     #[serde(default)]
     pub policy: Value,
+    /// Frozen source or seed tracks that provide semantic context for the
+    /// provider. This is separate from the candidates being scored.
+    #[serde(default)]
+    pub anchors: Vec<Anchor>,
     pub context: ScoreContext,
     pub candidates: Vec<Candidate>,
 }
@@ -581,6 +585,8 @@ mod tests {
         .expect("Library Signals host request fixture must be valid");
         assert_eq!(fixture.request_version, "guidance_host_request_v1");
         assert_eq!(fixture.provider.provider_id, "library-signals-guidance");
+        assert_eq!(fixture.anchors.len(), 1);
+        assert_eq!(fixture.anchors[0].anchor_id, "seed-1");
         assert_eq!(fixture.candidates[0].lms_urlmd5.as_deref(), Some("aabbcc"));
     }
 }

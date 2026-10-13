@@ -34,6 +34,17 @@
     "right_anchor_id": null,
     "context_track_ids": []
   },
+  "anchors": [{
+    "anchor_id": "seed-1",
+    "candidate_id": "file:///music/seed.flac",
+    "lms_urlmd5": "ddeeff",
+    "database_file": null,
+    "title": "Seed Song",
+    "artist": "Seed Artist",
+    "album": null,
+    "recording_mbid": null,
+    "artist_mbids": []
+  }],
   "candidates": [{
     "candidate_id": "file:///music/example.flac",
     "lms_urlmd5": "aabbcc",

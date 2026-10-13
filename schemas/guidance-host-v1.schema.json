@@ -17,6 +17,7 @@
         "deadline_ms": { "type": "integer", "minimum": 1 },
         "provider": { "$ref": "#/$defs/provider" },
         "policy": { "type": "object" },
+        "anchors": { "type": "array", "items": { "$ref": "guidance-addon-spi-v2.schema.json#/$defs/anchor" } },
         "context": { "$ref": "guidance-addon-spi-v2.schema.json#/$defs/score_context" },
         "candidates": { "type": "array", "items": { "$ref": "guidance-addon-spi-v2.schema.json#/$defs/candidate" } }
       },
