@@ -8,11 +8,10 @@ relationship for a particular transition).
 
 ## Current integration status
 
-The SPI v2 contract is used by the released Library Signals and Last.fm
-artifact-mode providers. Library Signals reads a trusted, read-only
-`persist.db`; Last.fm currently consumes a hash-bound artifact prepared by the
-Lyrion host and LastMix. Direct Last.fm API-key acquisition is not part of the
-released native contract path yet. `bliss-playlist-optimizer` and the native
+The SPI v2 contract is used by the Library Signals and Last.fm providers.
+Library Signals reads a trusted, read-only `persist.db`. Last.fm can consume a
+hash-bound artifact prepared through LastMix or acquire relations during
+`prepare` with a process-only API key. `bliss-playlist-optimizer` and the native
 `bliss-mixer` guidance endpoint are the current hosts.
 
 The current wire contract is **SPI v2**, versioned JSONL over stdin/stdout. The
@@ -34,6 +33,12 @@ Providers see only the bounded candidates being scored, including `lms_urlmd5`
 when a provider needs Lyrion identity lookup. The anchors let a provider map
 the host's track context to its own identities, such as artist MBIDs to Last.fm
 artist source IDs, without changing the host's route IDs.
+
+The host-neutral `guidance_host_request_v1` envelope also carries those frozen
+anchors separately from the scored candidates. A native host must forward them
+unchanged into the provider's SPI `prepare` request. This lets a provider fetch
+or load context evidence once, while `score` remains bounded to the candidates
+the Bliss-first host already admitted.
 
 The crate deliberately contains no LMS, Last.fm, Bliss database, or network
 implementation. It is the stable boundary shared by the current
