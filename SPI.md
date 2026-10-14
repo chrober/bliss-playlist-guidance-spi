@@ -406,6 +406,22 @@ They are advisory: the host records them and continues without that provider.
   unbounded data transfer per candidate.
 - Emit aggregate diagnostics without private music paths at INFO-level use.
 
+## Provider-owned log events
+
+Providers may attach a bounded `log_events_v1` array to the extensible
+`diagnostics.details` object. Each item follows `guidance_log_event_v1` and
+contains structured values only: `level`, `phase`, `event`, `provider_id`, and
+optional operation, source, cache, count, and provider-specific detail fields.
+It deliberately contains no rendered log message. Native hosts preserve these
+events; a Lyrion provider plugin validates, redacts, localizes, and renders
+them in its own log category.
+
+Hosts accept at most 64 valid events per diagnostics payload and at most 16 KiB
+per event. Invalid or oversized events are ignored without changing scores.
+INFO events are summaries; DEBUG events may include bounded, sanitized JSON or
+result details when requested by the host. Secrets, authenticated URLs, raw
+command lines, and unbounded collections are forbidden.
+
 ## Compatibility
 
 SPI v2 deliberately replaces v1. A host and provider must agree on both the

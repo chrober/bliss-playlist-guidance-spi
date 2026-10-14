@@ -13,6 +13,10 @@ pub mod policy;
 
 pub const SPI_VERSION: u16 = 2;
 pub const PROTOCOL_NAME: &str = "bliss-guidance-jsonl-v2";
+pub const GUIDANCE_LOG_EVENT_VERSION: &str = "guidance_log_event_v1";
+pub const GUIDANCE_LOG_EVENTS_KEY: &str = "log_events_v1";
+pub const MAX_GUIDANCE_LOG_EVENTS: usize = 64;
+pub const MAX_GUIDANCE_LOG_EVENT_BYTES: usize = 16 * 1024;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -198,6 +202,105 @@ pub struct Diagnostics {
     pub details: Option<Value>,
 }
 
+/// Provider-owned, host-neutral diagnostic event.
+///
+/// Native providers emit these structures inside `Diagnostics.details` under
+/// `log_events_v1`. Native hosts preserve them, while the Lyrion provider
+/// plugin remains responsible for rendering localized log text. The event
+/// intentionally has no free-form rendered-message field.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct GuidanceLogEventV1 {
+    pub event_version: String,
+    pub level: GuidanceLogLevel,
+    pub phase: String,
+    pub event: String,
+    pub provider_id: String,
+    #[serde(default)]
+    pub operation: Option<String>,
+    #[serde(default)]
+    pub source: Option<Value>,
+    #[serde(default)]
+    pub cache_state: Option<String>,
+    #[serde(default)]
+    pub result_count: Option<u64>,
+    #[serde(default)]
+    pub details: Option<Value>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum GuidanceLogLevel {
+    Error,
+    Warning,
+    Info,
+    Debug,
+}
+
+/// Extract valid provider log events while enforcing protocol bounds.
+/// Malformed or oversized events are ignored so observability can never break
+/// scoring or playlist generation.
+pub fn extract_guidance_log_events(diagnostics: &Diagnostics) -> Vec<GuidanceLogEventV1> {
+    let Some(events) = diagnostics
+        .details
+        .as_ref()
+        .and_then(Value::as_object)
+        .and_then(|details| details.get(GUIDANCE_LOG_EVENTS_KEY))
+        .and_then(Value::as_array)
+    else {
+        return Vec::new();
+    };
+
+    events
+        .iter()
+        .filter_map(|value| {
+            let serialized = serde_json::to_vec(value).ok()?;
+            if serialized.len() > MAX_GUIDANCE_LOG_EVENT_BYTES {
+                return None;
+            }
+            let event: GuidanceLogEventV1 = serde_json::from_value(value.clone()).ok()?;
+            if event.event_version != GUIDANCE_LOG_EVENT_VERSION
+                || event.event.is_empty()
+                || event.phase.is_empty()
+                || event.provider_id.is_empty()
+            {
+                return None;
+            }
+            Some(event)
+        })
+        .take(MAX_GUIDANCE_LOG_EVENTS)
+        .collect()
+}
+
+/// Merge bounded events into diagnostics without losing provider-specific
+/// fields already present in the extensible `details` object.
+pub fn merge_guidance_log_events(
+    diagnostics: &mut Diagnostics,
+    events: impl IntoIterator<Item = GuidanceLogEventV1>,
+) {
+    let mut merged = extract_guidance_log_events(diagnostics);
+    merged.extend(events);
+    let bounded: Vec<Value> = merged
+        .into_iter()
+        .filter_map(|event| {
+            let value = serde_json::to_value(event).ok()?;
+            (serde_json::to_vec(&value).ok()?.len() <= MAX_GUIDANCE_LOG_EVENT_BYTES)
+                .then_some(value)
+        })
+        .take(MAX_GUIDANCE_LOG_EVENTS)
+        .collect();
+
+    let details = diagnostics
+        .details
+        .get_or_insert_with(|| Value::Object(serde_json::Map::new()));
+    if !details.is_object() {
+        *details = Value::Object(serde_json::Map::new());
+    }
+    details
+        .as_object_mut()
+        .expect("details was normalized to an object")
+        .insert(GUIDANCE_LOG_EVENTS_KEY.into(), Value::Array(bounded));
+}
+
 /// Host-to-host description of one bounded native guidance request.
 ///
 /// This envelope is deliberately separate from the provider JSONL messages.
@@ -314,6 +417,80 @@ mod tests {
         bounded_multiplier, saturating_time_signal, target_share_multiplier,
         AppliedGuidanceContribution, GuidancePolicyEntry, HostPolicyKind,
     };
+
+    #[test]
+    fn guidance_log_event_round_trips_without_rendered_text() {
+        let event = GuidanceLogEventV1 {
+            event_version: GUIDANCE_LOG_EVENT_VERSION.into(),
+            level: GuidanceLogLevel::Info,
+            phase: "prepare".into(),
+            event: "lastfm_lookup_completed".into(),
+            provider_id: "lastfm-guidance".into(),
+            operation: Some("artist.getSimilar".into()),
+            source: Some(serde_json::json!({"label": "Rotor", "identity_kind": "artist_mbid"})),
+            cache_state: Some("miss".into()),
+            result_count: Some(25),
+            details: Some(serde_json::json!({"request_count": 1})),
+        };
+
+        let encoded = serde_json::to_value(&event).unwrap();
+        let decoded: GuidanceLogEventV1 = serde_json::from_value(encoded.clone()).unwrap();
+
+        assert_eq!(decoded, event);
+        assert!(encoded.get("message").is_none());
+    }
+
+    #[test]
+    fn diagnostics_extract_only_valid_bounded_log_events() {
+        let valid = serde_json::json!({
+            "event_version": "guidance_log_event_v1",
+            "level": "debug",
+            "phase": "score",
+            "event": "library_signals_scored",
+            "provider_id": "library-signals-guidance",
+            "result_count": 20,
+            "details": {}
+        });
+        let mut events = vec![valid.clone(); MAX_GUIDANCE_LOG_EVENTS + 5];
+        events.insert(0, serde_json::json!({"event_version": "unknown"}));
+        events.insert(0, serde_json::json!({"event_version": "guidance_log_event_v1", "level": "verbose"}));
+        let diagnostics = Diagnostics {
+            details: Some(serde_json::json!({"log_events_v1": events})),
+            ..Diagnostics::default()
+        };
+
+        let extracted = extract_guidance_log_events(&diagnostics);
+
+        assert_eq!(extracted.len(), MAX_GUIDANCE_LOG_EVENTS);
+        assert!(extracted.iter().all(|event| event.event == "library_signals_scored"));
+    }
+
+    #[test]
+    fn merging_log_events_preserves_unrelated_diagnostics_and_drops_oversized_events() {
+        let mut diagnostics = Diagnostics {
+            details: Some(serde_json::json!({"coverage": {"known": 18}})),
+            ..Diagnostics::default()
+        };
+        let small = GuidanceLogEventV1 {
+            event_version: GUIDANCE_LOG_EVENT_VERSION.into(),
+            level: GuidanceLogLevel::Info,
+            phase: "prepare".into(),
+            event: "library_signals_prepared".into(),
+            provider_id: "library-signals-guidance".into(),
+            operation: None,
+            source: None,
+            cache_state: None,
+            result_count: Some(18),
+            details: None,
+        };
+        let mut oversized = small.clone();
+        oversized.details = Some(serde_json::json!({"payload": "x".repeat(MAX_GUIDANCE_LOG_EVENT_BYTES)}));
+
+        merge_guidance_log_events(&mut diagnostics, [small.clone(), oversized]);
+
+        assert_eq!(diagnostics.details.as_ref().unwrap()["coverage"]["known"], 18);
+        assert_eq!(extract_guidance_log_events(&diagnostics), vec![small]);
+    }
 
     #[test]
     fn shared_policy_clamps_orders_and_reports_bounded_contributions() {
