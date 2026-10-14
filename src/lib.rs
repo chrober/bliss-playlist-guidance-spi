@@ -453,7 +453,10 @@ mod tests {
         });
         let mut events = vec![valid.clone(); MAX_GUIDANCE_LOG_EVENTS + 5];
         events.insert(0, serde_json::json!({"event_version": "unknown"}));
-        events.insert(0, serde_json::json!({"event_version": "guidance_log_event_v1", "level": "verbose"}));
+        events.insert(
+            0,
+            serde_json::json!({"event_version": "guidance_log_event_v1", "level": "verbose"}),
+        );
         let diagnostics = Diagnostics {
             details: Some(serde_json::json!({"log_events_v1": events})),
             ..Diagnostics::default()
@@ -462,7 +465,9 @@ mod tests {
         let extracted = extract_guidance_log_events(&diagnostics);
 
         assert_eq!(extracted.len(), MAX_GUIDANCE_LOG_EVENTS);
-        assert!(extracted.iter().all(|event| event.event == "library_signals_scored"));
+        assert!(extracted
+            .iter()
+            .all(|event| event.event == "library_signals_scored"));
     }
 
     #[test]
@@ -484,11 +489,15 @@ mod tests {
             details: None,
         };
         let mut oversized = small.clone();
-        oversized.details = Some(serde_json::json!({"payload": "x".repeat(MAX_GUIDANCE_LOG_EVENT_BYTES)}));
+        oversized.details =
+            Some(serde_json::json!({"payload": "x".repeat(MAX_GUIDANCE_LOG_EVENT_BYTES)}));
 
         merge_guidance_log_events(&mut diagnostics, [small.clone(), oversized]);
 
-        assert_eq!(diagnostics.details.as_ref().unwrap()["coverage"]["known"], 18);
+        assert_eq!(
+            diagnostics.details.as_ref().unwrap()["coverage"]["known"],
+            18
+        );
         assert_eq!(extract_guidance_log_events(&diagnostics), vec![small]);
     }
 
