@@ -194,6 +194,23 @@
       },
       "additionalProperties": false
     },
+    "guidance_log_event_v1": {
+      "type": "object",
+      "required": ["event_version", "level", "phase", "event", "provider_id"],
+      "properties": {
+        "event_version": { "const": "guidance_log_event_v1" },
+        "level": { "enum": ["error", "warning", "info", "debug"] },
+        "phase": { "type": "string", "minLength": 1 },
+        "event": { "type": "string", "minLength": 1 },
+        "provider_id": { "type": "string", "minLength": 1 },
+        "operation": { "type": ["string", "null"] },
+        "source": {},
+        "cache_state": { "type": ["string", "null"] },
+        "result_count": { "type": ["integer", "null"], "minimum": 0 },
+        "details": {}
+      },
+      "additionalProperties": false
+    },
     "closed": {
       "type": "object",
       "required": ["type", "provider_id"],
