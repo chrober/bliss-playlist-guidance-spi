@@ -8,12 +8,12 @@ relationship for a particular transition).
 
 ## Current integration status
 
-The SPI v2 contract is used by the released Library Signals and Last.fm
-artifact-mode providers. Library Signals reads a trusted, read-only
-`persist.db`; Last.fm currently consumes a hash-bound artifact prepared by the
-Lyrion host and LastMix. Direct Last.fm API-key acquisition is not part of the
-released native contract path yet. `bliss-playlist-optimizer` and the native
-`bliss-mixer` guidance endpoint are the current hosts.
+The SPI v2 contract is used by the Library Signals and Last.fm providers.
+Library Signals reads a trusted, read-only `persist.db`. Last.fm can either
+consume a hash-bound artifact prepared through LastMix or acquire and cache
+bounded relations during its direct API-key `prepare` phase.
+`bliss-playlist-optimizer` and the native `bliss-mixer` guidance endpoint are
+the current hosts.
 
 The current wire contract is **SPI v2**, versioned JSONL over stdin/stdout. The
 host owns discovery, bounded score batching, guidance aggregation, hard
@@ -27,11 +27,13 @@ whereas `target_share` calibrates supported candidates within an existing
 Bliss-qualified pool. Neither policy can admit a candidate that Bliss rejected.
 
 SPI v2 distinguishes immutable, hash-bound evidence artifacts (for example
-Last.fm relations resolved by Better Call Bliss) from trusted read-only
-resources (for example Lyrion's `persist.db`). Preparation deliberately carries
-no full candidate inventory; it carries only job anchors and provider input.
-Providers see only the bounded candidates being scored, including `lms_urlmd5`
-when a provider needs Lyrion identity lookup. The anchors let a provider map
+Last.fm relations resolved through LastMix) from trusted read-only resources
+(for example Lyrion's `persist.db`) and trusted provider launch configuration.
+Preparation deliberately carries no decoded Bliss library. It carries job
+anchors and provider input; direct providers may perform bounded acquisition
+there, but `score` stays network-free. Providers see only the bounded
+candidates being scored, including title, artist, album, recording MBID,
+artist MBIDs, and `lms_urlmd5` where available. The anchors let a provider map
 the host's track context to its own identities, such as artist MBIDs to Last.fm
 artist source IDs, without changing the host's route IDs.
 
